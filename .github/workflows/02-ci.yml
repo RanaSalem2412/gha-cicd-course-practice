@@ -9,6 +9,7 @@ on:
       - "app/**"
       - "tests/**"
       - ".github/workflows/02-ci.yml"
+      - "Dockerfile"
   schedule:
     - cron: '0 * * * *'    
   # Allow a safe manual run before students trigger it with a code change.
@@ -39,7 +40,29 @@ jobs:
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
-          
+
+
+
+      # Scan the project filesystem
+      - name: Trivy Filesystem Scan 
+        uses: aquasecurity/trivy-action@0.28.0  
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+
+      # Scan Dockerfile and other IaC configurations
+      - name: Trivy Dockerfile Scan
+        uses: aquasecurity/trivy-action@0.28.0   
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          exit-code: '1'
+          severity: HIGH,CRITICAL
+ 
 
       - name: Run tests
         # This is the key verification step in the CI workflow.
@@ -55,3 +78,9 @@ jobs:
 
           echo "=== Listing Repository Files ==="
           ls -la
+
+
+
+
+
+          
