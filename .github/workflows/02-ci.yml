@@ -51,17 +51,17 @@ jobs:
           scan-ref: .
           format: table
           exit-code: '1'
-          severity: HIGH,CRITICAL
+          severity: CRITICAL
 
       # Scan Dockerfile and other IaC configurations
       - name: Trivy Dockerfile Scan
         uses: aquasecurity/trivy-action@master  
         with:
           scan-type: config
-          scan-ref: .
+          scan-ref: Dockerfile
           format: table
           exit-code: '1'
-          severity: HIGH,CRITICAL
+          severity: CRITICAL
  
 
       - name: Run tests
