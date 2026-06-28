@@ -79,7 +79,7 @@ jobs:
         # Retry a few times because app startup can take a moment.
         run: |
           for attempt in 1 2 3 4 5; do
-            if curl --fail --silent "http://127.0.0.1:${APP_PORT}/health"; then
+            if curl --fail --silent "http://127.0.0.1:8000/health"; then
               exit 0
             fi
             echo "Waiting for app to become ready..."
