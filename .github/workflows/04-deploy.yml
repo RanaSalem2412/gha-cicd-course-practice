@@ -68,6 +68,8 @@ jobs:
             -p "${APP_PORT}:8000" \
             "${{ steps.image-metadata.outputs.image_reference }}"
 
+
+
       - name: Show running containers
         run: docker ps   
 
