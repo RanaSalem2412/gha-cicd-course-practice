@@ -3,12 +3,14 @@
 name: 04 Deploy Workflow
 
 on:
-  workflow_run:
+ # workflow_run:
     # Listen for the build workflow by name.
-    workflows: ["02 CI Workflow"]
+   # workflows: ["02 CI Workflow"]
     # Start when the build workflow has completed.
-    types: [completed]
-
+   # types: [completed]
+  pull_request:
+    types:
+     - closed
 env:
   IMAGE_NAME: tiny-health-app
   IMAGE_TAR: tiny-health-app.tar
@@ -24,6 +26,8 @@ permissions:
 
 jobs:
   deploy-package:
+    # Run only if the pull request was merged.
+    if: github.event.pull_request.merged == true
     # Continue only when the build workflow succeeded.
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     # Use a fresh runner for the deployment simulation.
@@ -88,7 +92,9 @@ jobs:
           echo "App did not become ready in time."
           exit 1
 
-          
+      - name: Show container logs
+        if: failure()
+        run: docker logs "${CONTAINER_NAME}"    
 
       - name: Stop container
         if: always()
