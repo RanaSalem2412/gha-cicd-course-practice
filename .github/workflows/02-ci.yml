@@ -3,153 +3,179 @@
 name: 02 CI Workflow
 
 on:
-  # Run automatically when app code, tests, or this workflow file changes.
-  push:
-    paths:
-      - "app/**"
-      - "tests/**"
-      - ".github/workflows/02-ci.yml"
-      - "Dockerfile"
   schedule:
-    - cron: '0 * * * *'    
+    # Runs every day at 09:20 UTC
+    - cron: '20 9 * * *'
+  # Run automatically when app code, tests, or this workflow file changes.
+  # push:
+  #   paths:
+  #     - "app/**"
+  #     - "tests/**"
+  #     - ".github/workflows/02-ci.yml"
+
   # Allow a safe manual run before students trigger it with a code change.
   workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
 
 jobs:
   run-tests:
-    # The runner is the temporary machine that executes the steps below.
-    runs-on: ${{ matrix.os }}
 
-    #env:
-      #PYTHON_VERSION: ${{ secrets.PYTHON_VERSION }}
+    ## The runner is the temporary machine that executes the steps below.
+    ## runs-on: ubuntu-latest
 
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12"] 
-        os: [ubuntu-latest, macos-latest] 
+    runs-on: ubuntu-latest
 
+    # strategy:
+    #   matrix:
+    #     os: [ubuntu-latest, macos-latest]
+    #     python-version: ["3.11", "3.12"]
 
 
     steps:
+    # first step
       - name: Check out repository
         # Download the repository contents onto the runner.
         uses: actions/checkout@v6
 
       - name: Set up Python
-        # Prepare Python on the runner. This does not change the student laptop.
+        ##Prepare Python on the runner. This does not change the student laptop.
+        # uses: actions/setup-python@v6
+        # with:
+        #   python-version: ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: "3.12"
 
-      # lint
-      - name: Install Ruff 
+      # - name: Print Python Version
+      #   run: python --version
+      - name: Get and Save Python Version
+        run: |
+          # 1. Get the version string (e.g., "Python 3.11.5")
+          PY_VER=$(python --version)
+          
+          # 2. Save it to the GitHub Environment file
+          echo "MY_PYTHON_VERSION=$PY_VER" >> $GITHUB_ENV
+
+      - name: Print the Saved Environment Variable
+        run: |
+          # 3. Read it using standard shell syntax or GitHub context
+          # echo "The saved version is: ${{ secrets.PY_VER }}"
+          echo "The saved version is: $MY_PYTHON_VERSION"
+
+      - name: Install Ruff
         run: |
           python -m pip install --upgrade pip
-          pip install ruff 
+          pip install ruff
 
-      - name: Lint with Ruff
-        run: | 
+      - name: Run Ruff
+        run: |
           ruff check .     
 
-
-
-      # Scan the project filesystem
-      - name: Trivy Filesystem Scan 
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy Filesystem Scan
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
           format: table
-          exit-code: '1'
-          severity: CRITICAL
+          exit-code: 1
+          severity: CRITICAL,HIGH
 
-      # Scan Dockerfile and other IaC configurations
-      - name: Trivy Dockerfile Scan
-        uses: aquasecurity/trivy-action@master  
+      - name: Run Trivy Dockerfile Scan
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: config
-          scan-ref: Dockerfile
-          format: table
-          exit-code: '1'
-          severity: CRITICAL
- 
+          scan-type: 'config'
+          scan-ref: 'Dockerfile' # Path to your Dockerfile
+          format: 'table'
+          exit-code: '1' # Fails the build if issues are found
+          severity: 'CRITICAL'
+
+      - name: Check current time
+        run: date
 
       - name: Run tests
         # This is the key verification step in the CI workflow.
         run: python -m unittest discover -s tests -v
+  ##job header
+  build-artifact:
+  ####building docker - scan it using trivy - save as a tar file - build it as artifact
+#   Repository
+#       │
+#       ▼
+# docker build
+#       │
+#       ▼
+# Docker Image
+#       │
+#       ▼
+# Trivy Scan
+#       │
+#       ▼
+# docker save
+#       │
+#       ▼
+# tiny-health-app.tar
+#       │
+#       ▼
+# Upload Artifact
 
-      # build artifact and scan it and upload
+##job name 
+    name: Build Docker Artifact
+    ## runner - build ubuntu server then install
+    runs-on: ubuntu-latest
+    needs: run-tests
 
-      - name: Build Application Artifact
+    env:
+      IMAGE_NAME: tiny-health-app
+      IMAGE_TAR: tiny-health-app.tar
+      IMAGE_METADATA: image-metadata.env
+      ARTIFACT_NAME: tiny-health-app-image
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set image tag
+        id: image-tag
         run: |
-          mkdir build
+          TODAY="$(date -u +%Y-%m-%d)"
+          IMAGE_TAG="${TODAY}-${GITHUB_RUN_ID}"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
-          cp -r app build/
-          cp -r tests build/
-          cp Dockerfile build/
+      - name: Build Docker image
+        run: |
+          docker build \
+            -t "${IMAGE_NAME}:${{ steps.image-tag.outputs.image_tag }}" \
+            .
 
-          zip -r app-artifact.zip build
-
-      - name: Trivy Scan Artifact
-        uses: aquasecurity/trivy-action@master
+      - name: Run Trivy Image Scan
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
-          scan-type: fs
-          scan-ref: app-artifact.zip
+          image-ref: "${{ env.IMAGE_NAME }}:${{ steps.image-tag.outputs.image_tag }}"
           format: table
-          exit-code: '1'
-          severity: CRITICAL 
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: "os,library"
+          severity: "HIGH,CRITICAL"
 
-      - name: Upload Build Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-app
-          path: app-artifact.zip 
 
-      # build docker image and scan it and upload
+      - name: Save Docker image as artifact file
+        run: docker save "${IMAGE_NAME}:${{ steps.image-tag.outputs.image_tag }}" -o "${IMAGE_TAR}"
 
-      - name: Build Docker Image
-        if: matrix.os == 'ubuntu-latest'
+
+      - name: Save image metadata
         run: |
-          docker build -t myapp:${{ github.sha }} .  
+          IMAGE_REFERENCE="${IMAGE_NAME}:${{ steps.image-tag.outputs.image_tag }}"
+          printf 'IMAGE_TAG=%s\n' "${{ steps.image-tag.outputs.image_tag }}" > "${IMAGE_METADATA}"
+          printf 'IMAGE_REFERENCE=%s\n' "${IMAGE_REFERENCE}" >> "${IMAGE_METADATA}"
 
-      - name: Trivy Image Scan
-        if: matrix.os == 'ubuntu-latest'
-        uses: aquasecurity/trivy-action@master
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v5
         with:
-          image-ref: myapp:${{ github.sha }}
-          format: table
-          exit-code: '0'
-          severity: CRITICAL
-
-
-      - name: Save Docker Image
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          docker save myapp:${{ github.sha }} -o myapp.tar   
-
-      - name: Upload Docker Image Artifact
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: docker-image
-          path: myapp.tar       
-
-
-
-
-      - name: Check Time, List Files and Verify Python
-        run: |
-          echo "=== Checking Runner System Time (UTC) ==="
-          date
-
-          echo "=== Checking Python Version ==="
-          python --version
-
-          echo "=== Listing Repository Files ==="
-          ls -la
-
-
-
-
-
-          
+          name: ${{ env.ARTIFACT_NAME }}
+          path: |
+            ${{ env.IMAGE_TAR }}
+            ${{ env.IMAGE_METADATA }}
+          retention-days: 7
