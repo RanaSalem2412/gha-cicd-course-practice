@@ -78,6 +78,33 @@ jobs:
         # This is the key verification step in the CI workflow.
         run: python -m unittest discover -s tests -v
 
+      # build artifact and scan it and upload
+
+      - name: Build Application Artifact
+        run: |
+          mkdir build
+
+          cp -r app build/
+          cp -r tests build/
+          cp Dockerfile build/
+
+          zip -r app-artifact.zip build
+
+      - name: Trivy Scan Artifact
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: app-artifact.zip
+          format: table
+          exit-code: '1'
+          severity: CRITICAL 
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-app
+          path: app-artifact.zip      
+
       - name: Check Time, List Files and Verify Python
         run: |
           echo "=== Checking Runner System Time (UTC) ==="
