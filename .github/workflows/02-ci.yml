@@ -108,10 +108,12 @@ jobs:
       # build docker image and scan it and upload
 
       - name: Build Docker Image
+        if: matrix.os == 'ubuntu-latest'
         run: |
           docker build -t myapp:${{ github.sha }} .  
 
       - name: Trivy Image Scan
+        if: matrix.os == 'ubuntu-latest'
         uses: aquasecurity/trivy-action@master
         with:
           image-ref: myapp:${{ github.sha }}
@@ -121,16 +123,18 @@ jobs:
 
 
       - name: Save Docker Image
+        if: matrix.os == 'ubuntu-latest'
         run: |
           docker save myapp:${{ github.sha }} -o myapp.tar   
 
       - name: Upload Docker Image Artifact
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/upload-artifact@v4
         with:
           name: docker-image
           path: myapp.tar       
-          
-              
+
+
 
 
       - name: Check Time, List Files and Verify Python
