@@ -68,6 +68,8 @@ jobs:
             -p "${APP_PORT}:8000" \
             "${{ steps.image-metadata.outputs.image_reference }}"
 
+
+
       - name: Show running containers
         run: docker ps   
 
@@ -77,16 +79,12 @@ jobs:
         # Retry a few times because app startup can take a moment.
         run: |
           for attempt in 1 2 3 4 5; do
-            RESPONSE=$(curl --fail --silent "http://127.0.0.1:${APP_PORT}/health")
-
-            if [ $? -eq 0 ]; then
-              echo "Health endpoint response:"
-              echo "$RESPONSE"
+            if curl --fail --silent "http://127.0.0.1:8000/health"; then
               exit 0
             fi
             echo "Waiting for app to become ready..."
             sleep 2
-          done  
+          done
           echo "App did not become ready in time."
           exit 1
 
